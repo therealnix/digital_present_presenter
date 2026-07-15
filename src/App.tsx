@@ -78,6 +78,7 @@ type AppState = "shake" | "rip" | "opened";
 export default function App() {
   const [appState, setAppState] = useState<AppState>("shake");
   const [hits, setHits] = useState(0);
+  const [focused, setFocused] = useState(false);
   const [, setShakeCount] = useState(0);
   const presentControls = useAnimation();
   const handAnimation = useAnimation();
@@ -234,7 +235,7 @@ export default function App() {
 
   return (
     <div 
-      className="min-h-[100dvh] w-full flex flex-col items-center justify-center bg-gradient-to-br from-yellow-200 via-pink-200 to-purple-200 overflow-hidden touch-none cursor-crosshair fixed inset-0"
+      className="min-h-[100dvh] w-full bg-white overflow-hidden touch-none cursor-crosshair fixed inset-0"
       onPointerDown={() => {
         requestPermission();
         const ctx = getAudioContext();
@@ -242,39 +243,83 @@ export default function App() {
           ctx.resume();
         }
         if (appState === "shake") handleShake();
+        if (appState === "opened" && focused) setFocused(false);
       }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white/40 via-transparent to-transparent pointer-events-none"></div>
-      
-      <div className="relative z-10 flex flex-col items-center justify-center pointer-events-none w-full max-w-lg mx-auto h-full">
-        {/* Present Area */}
-        <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center shrink-0">
-          {appState !== "opened" ? (
-            <motion.div
-              ref={presentRef}
-              animate={presentControls}
-              className="w-56 h-56 relative pointer-events-auto"
+      {/* BLURRED BACKGROUND LAYER */}
+      <motion.div 
+        className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
+        animate={{ 
+          filter: focused ? "blur(16px)" : "blur(0px)", 
+          opacity: focused ? 0.4 : 1 
+        }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-lg mx-auto h-full">
+          {/* Present Area */}
+          <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center shrink-0">
+            {appState !== "opened" ? (
+              <motion.div
+                ref={presentRef}
+                animate={presentControls}
+                className="w-56 h-56 relative pointer-events-auto"
+              >
+                <img 
+                  src={hits < 2 ? "/present_closed.png" : hits < 4 ? "/present_ripped_1.png" : "/present_ripped_2.png"}
+                  alt="Present Box" 
+                  draggable="false"
+                  className="w-full h-full object-contain mix-blend-multiply select-none"
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", bounce: 0.6 }}
+                className="w-64 h-64 sm:w-72 sm:h-72 relative pointer-events-auto"
+              >
+                <img 
+                  src="/present_opened_new.png" 
+                  alt="Opened Present" 
+                  draggable="false"
+                  className="w-full h-full object-contain mix-blend-multiply z-10 relative select-none"
+                />
+              </motion.div>
+            )}
+          </div>
+
+          {/* Text Instruction - fixed height container to prevent shift */}
+          <div className="h-24 sm:h-32 flex items-center justify-center mt-6 shrink-0 w-full px-4 relative z-0">
+            <motion.h1 
+              key={appState}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`text-3xl sm:text-4xl md:text-6xl font-extrabold text-indigo-950 text-center tracking-tight drop-shadow-sm max-w-sm transition-opacity duration-300 ${focused ? 'opacity-0' : 'opacity-100'}`}
             >
-              <img 
-                src={hits < 2 ? "/present_closed.png" : hits < 4 ? "/present_ripped_1.png" : "/present_ripped_2.png"}
-                alt="Present Box" 
-                draggable="false"
-                className="w-full h-full object-contain mix-blend-multiply select-none"
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", bounce: 0.6 }}
-              className="w-64 h-64 sm:w-72 sm:h-72 relative pointer-events-auto"
-            >
-              <img 
-                src="/present_opened_new.png" 
-                alt="Opened Present" 
-                draggable="false"
-                className="w-full h-full object-contain mix-blend-multiply z-10 relative select-none"
-              />
+              {appState === "shake" && "Schüttel mir!"}
+              {appState === "rip" && "Öffne mir!"}
+              {appState === "opened" && "Happy Birthday Mudda!"}
+            </motion.h1>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* TICKETS LAYER (UNBLURRED) */}
+      {appState === "opened" && (
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none">
+          
+          {/* Invisible click-catcher overlay to dismiss focus */}
+          {focused && (
+            <div 
+              className="absolute inset-0 pointer-events-auto" 
+              onClick={() => setFocused(false)} 
+              onPointerDown={(e) => e.stopPropagation()} 
+            />
+          )}
+
+          {/* Mirror the flex layout of the background to perfectly align the tickets initially */}
+          <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-lg mx-auto h-full">
+            <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center shrink-0">
               
               {/* Tickets popping out centered and fanned out */}
               {[0, 1, 2].map((i) => (
@@ -283,40 +328,54 @@ export default function App() {
                   initial={{ x: "-50%", y: 0, scale: 0, opacity: 0, rotate: 0 }}
                   animate={{ 
                     x: "-50%",
-                    y: -140 - (Math.abs(1 - i) * 10), // slight vertical curve
-                    scale: 1.4,
+                    // When focused, y: 0 brings it to the true center of the screen since the tickets naturally sit near the center.
+                    // When unfocused, y: -140 pushes them up out of the present box.
+                    y: focused ? -20 + (Math.abs(1 - i) * 10) : -140 - (Math.abs(1 - i) * 10), 
+                    scale: focused ? 2.2 : 1.4,
                     opacity: 1,
-                    rotate: (i - 1) * 10 
+                    rotate: focused ? (i - 1) * 5 : (i - 1) * 10,
+                    zIndex: focused ? 100 + i : 50 + i
                   }}
-                  transition={{ delay: 0.3 + (i * 0.1), duration: 1.2, type: "spring", bounce: 0.4 }}
-                  className="absolute top-[66%] left-1/2 w-40 sm:w-48 z-50"
+                  transition={{ delay: focused ? 0 : 0.3 + (i * 0.1), duration: focused ? 0.6 : 1.2, type: "spring", bounce: 0.4 }}
+                  className="absolute top-[66%] left-1/2 w-40 sm:w-48 cursor-pointer pointer-events-auto"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFocused(!focused);
+                  }}
                 >
                   <img 
                     src="/kaya-yanar-23-ft.jpg" 
                     alt="Kaya Yanar Ticket" 
                     draggable="false"
-                    className="w-full h-auto rounded-xl shadow-2xl border-4 border-white select-none"
+                    className={`w-full h-auto rounded-xl shadow-2xl border-4 border-white select-none transition-shadow ${focused ? 'shadow-indigo-500/50' : ''}`}
                   />
                 </motion.div>
               ))}
-            </motion.div>
-          )}
+            </div>
+            
+            {/* Spacer to match the bottom text so the flex center matches exactly */}
+            <div className="h-24 sm:h-32 mt-6 shrink-0 w-full px-4" />
+          </div>
         </div>
+      )}
 
-        {/* Text Instruction - fixed height container to prevent shift */}
-        <div className="h-24 sm:h-32 flex items-center justify-center mt-6 shrink-0 w-full px-4">
-          <motion.h1 
-            key={appState}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-3xl sm:text-4xl md:text-6xl font-extrabold text-indigo-950 text-center tracking-tight drop-shadow-sm max-w-sm"
-          >
-            {appState === "shake" && "Schüttel mir!"}
-            {appState === "rip" && "Öffne mir!"}
-            {appState === "opened" && "Happy Birthday Mudda!"}
-          </motion.h1>
+      {/* FOCUSED TEXT OVERLAY */}
+      <motion.div
+        initial={false}
+        animate={{ 
+          opacity: focused ? 1 : 0, 
+          y: focused ? 0 : 20,
+          pointerEvents: focused ? "auto" : "none"
+        }}
+        className="absolute bottom-12 left-0 right-0 flex justify-center z-[200] px-4"
+      >
+        <div className="bg-white/90 backdrop-blur-md px-6 py-4 rounded-3xl shadow-2xl border border-white max-w-md text-center">
+          <p className="text-xl sm:text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            3 Tickets für Kaya Yanar am 16.11.26 :)
+          </p>
         </div>
-      </div>
+      </motion.div>
 
       {/* Custom Cursor Hand */}
       {appState === "rip" && (
