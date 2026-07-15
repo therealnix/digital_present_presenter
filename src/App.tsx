@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, useAnimation, useMotionValue, useSpring } from "framer-motion";
-import { cn } from "./lib/utils";
 
 let globalAudioCtx: AudioContext | null = null;
 const getAudioContext = () => {
@@ -79,7 +78,7 @@ type AppState = "shake" | "rip" | "opened";
 export default function App() {
   const [appState, setAppState] = useState<AppState>("shake");
   const [hits, setHits] = useState(0);
-  const [shakeCount, setShakeCount] = useState(0);
+  const [, setShakeCount] = useState(0);
   const presentControls = useAnimation();
   const handAnimation = useAnimation();
   const presentRef = useRef<HTMLDivElement>(null);
