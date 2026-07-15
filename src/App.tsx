@@ -2,10 +2,20 @@ import { useState, useEffect, useRef } from "react";
 import { motion, useAnimation, useMotionValue, useSpring } from "framer-motion";
 import { cn } from "./lib/utils";
 
+let globalAudioCtx: AudioContext | null = null;
+const getAudioContext = () => {
+  if (!globalAudioCtx) {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioContextClass) {
+      globalAudioCtx = new AudioContextClass();
+    }
+  }
+  return globalAudioCtx;
+};
+
 const playSound = (type: "shake" | "rip" | "pop") => {
-  const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-  if (!AudioContext) return;
-  const audioCtx = new AudioContext();
+  const audioCtx = getAudioContext();
+  if (!audioCtx) return;
 
   if (type === "shake") {
     for (let i = 0; i < 4; i++) {
@@ -69,11 +79,13 @@ type AppState = "shake" | "rip" | "opened";
 export default function App() {
   const [appState, setAppState] = useState<AppState>("shake");
   const [hits, setHits] = useState(0);
+  const [shakeCount, setShakeCount] = useState(0);
   const presentControls = useAnimation();
   const handAnimation = useAnimation();
   const presentRef = useRef<HTMLDivElement>(null);
   
   const lastHitTime = useRef<number>(0);
+  const lastShakeTime = useRef<number>(0);
   const lastMousePos = useRef({ x: 0, y: 0, time: 0 });
 
   // Pointer tracking for the hand
@@ -198,30 +210,46 @@ export default function App() {
 
   const handleShake = () => {
     if (appState !== "shake") return;
+
+    const now = Date.now();
+    if (now - lastShakeTime.current < 500) return; // 500ms cooldown
+    lastShakeTime.current = now;
+
     playSound("shake");
     presentControls.start({
       x: [0, -10, 10, -10, 10, 0],
       rotate: [0, -5, 5, -5, 5, 0],
       transition: { duration: 0.4 }
     });
-    setTimeout(() => {
-      setAppState("rip");
-    }, 1000);
+    
+    setShakeCount((prev) => {
+      const newCount = prev + 1;
+      if (newCount === 5) {
+        setTimeout(() => {
+          setAppState("rip");
+        }, 500);
+      }
+      return newCount;
+    });
   };
 
   return (
     <div 
-      className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-yellow-200 via-pink-200 to-purple-200 overflow-hidden touch-none cursor-crosshair"
+      className="min-h-[100dvh] w-full flex flex-col items-center justify-center bg-gradient-to-br from-yellow-200 via-pink-200 to-purple-200 overflow-hidden touch-none cursor-crosshair fixed inset-0"
       onPointerDown={() => {
         requestPermission();
+        const ctx = getAudioContext();
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume();
+        }
         if (appState === "shake") handleShake();
       }}
     >
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white/40 via-transparent to-transparent pointer-events-none"></div>
       
-      <div className="relative z-10 flex flex-col items-center pointer-events-none">
+      <div className="relative z-10 flex flex-col items-center justify-center pointer-events-none w-full max-w-lg mx-auto h-full">
         {/* Present Area */}
-        <div className="relative w-72 h-72 flex items-center justify-center mb-8">
+        <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center shrink-0">
           {appState !== "opened" ? (
             <motion.div
               ref={presentRef}
@@ -229,7 +257,7 @@ export default function App() {
               className="w-56 h-56 relative pointer-events-auto"
             >
               <img 
-                src={hits < 2 ? "/present_closed.jpg" : hits < 4 ? "/present_ripped_1.jpg" : "/present_ripped_2.jpg"}
+                src={hits < 2 ? "/present_closed.png" : hits < 4 ? "/present_ripped_1.png" : "/present_ripped_2.png"}
                 alt="Present Box" 
                 draggable="false"
                 className="w-full h-full object-contain mix-blend-multiply select-none"
@@ -240,36 +268,35 @@ export default function App() {
               initial={{ scale: 0.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", bounce: 0.6 }}
-              className="w-72 h-72 relative pointer-events-auto"
+              className="w-64 h-64 sm:w-72 sm:h-72 relative pointer-events-auto"
             >
               <img 
-                src="/present_opened_new.jpg" 
+                src="/present_opened_new.png" 
                 alt="Opened Present" 
                 draggable="false"
                 className="w-full h-full object-contain mix-blend-multiply z-10 relative select-none"
               />
               
-              {/* Tickets popping out BIG and PROMINENT */}
+              {/* Tickets popping out centered and fanned out */}
               {[0, 1, 2].map((i) => (
                 <motion.div
                   key={i}
-                  initial={{ y: 50, scale: 0.2, opacity: 0, rotate: 0 }}
+                  initial={{ x: "-50%", y: 0, scale: 0, opacity: 0, rotate: 0 }}
                   animate={{ 
-                    y: -100 - (i * 30), 
-                    scale: 2.2,
-                    opacity: 1, 
-                    rotate: (i - 1) * 12 
+                    x: "-50%",
+                    y: -140 - (Math.abs(1 - i) * 10), // slight vertical curve
+                    scale: 1.4,
+                    opacity: 1,
+                    rotate: (i - 1) * 10 
                   }}
-                  transition={{ delay: 0.2 + (i * 0.1), type: "spring", bounce: 0.5 }}
-                  className={cn(
-                    "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-24 z-50",
-                  )}
+                  transition={{ delay: 0.3 + (i * 0.1), duration: 1.2, type: "spring", bounce: 0.4 }}
+                  className="absolute top-[66%] left-1/2 w-40 sm:w-48 z-50"
                 >
                   <img 
-                    src="/ticket_placeholder.jpg" 
-                    alt="Ticket Placeholder" 
+                    src="/kaya-yanar-23-ft.jpg" 
+                    alt="Kaya Yanar Ticket" 
                     draggable="false"
-                    className="w-full h-full object-cover rounded-xl shadow-2xl border-4 border-white select-none"
+                    className="w-full h-auto rounded-xl shadow-2xl border-4 border-white select-none"
                   />
                 </motion.div>
               ))}
@@ -277,17 +304,19 @@ export default function App() {
           )}
         </div>
 
-        {/* Text Instruction */}
-        <motion.h1 
-          key={appState}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-4xl md:text-6xl font-extrabold text-indigo-950 text-center tracking-tight drop-shadow-sm max-w-sm px-4"
-        >
-          {appState === "shake" && "Shake your phone!"}
-          {appState === "rip" && "Swipe fast to rip the paper!"}
-          {appState === "opened" && "Surprise!"}
-        </motion.h1>
+        {/* Text Instruction - fixed height container to prevent shift */}
+        <div className="h-24 sm:h-32 flex items-center justify-center mt-6 shrink-0 w-full px-4">
+          <motion.h1 
+            key={appState}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-3xl sm:text-4xl md:text-6xl font-extrabold text-indigo-950 text-center tracking-tight drop-shadow-sm max-w-sm"
+          >
+            {appState === "shake" && "Schüttel mir!"}
+            {appState === "rip" && "Öffne mir!"}
+            {appState === "opened" && "Happy Birthday Mudda!"}
+          </motion.h1>
+        </div>
       </div>
 
       {/* Custom Cursor Hand */}
@@ -306,7 +335,7 @@ export default function App() {
           className="w-32 h-32"
         >
           <img 
-            src="/grabbing_hand.jpg" 
+            src="/grabbing_hand.png" 
             alt="Hand" 
             draggable="false"
             className="w-full h-full object-contain mix-blend-multiply drop-shadow-xl select-none"
